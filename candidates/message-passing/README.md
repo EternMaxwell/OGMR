@@ -44,15 +44,111 @@ Spell and magic are different structures.
 
 The interpreter keeps this separation while resolving many spells into one performer-facing magic object. It validates and lowers data, but it does not apply effects to a game world.
 
-## Quick validation examples
+## Validation example
 
-| Magic | Behavior | Example implementable performer logic | Implementability / extensibility check |
-| --- | --- | --- | --- |
-| Thermal Lift | Select a target volume, add bounded heat, convert part of that energy into upward pressure, and expire before overheating. | A performer validates thermal and force capabilities, resolves the target, applies capped heat/impulse, or approximates with a lift status. | Implementable because bounds and capabilities are explicit; extensible with new heat models and pressure solvers. |
-| Water Wall | Gather nearby water or water-tagged entities, shape them into a barrier, increase cohesion, and release them after duration. | A performer maps selection to fluid cells, particles, or gameplay entities, then applies cohesion and collision rules. | Implementable at many simulation fidelities; extensible with material filters and wall-shape plugins. |
-| Stone Brace | Target a body or surface, increase stiffness and fracture threshold, add mass penalty, and cleanly restore original values. | A performer stores original material data, applies bounded modifiers, and restores or blends them on expiry. | Implementable for stats, rigid bodies, or soft bodies; extensible with more material attributes. |
-| Gravity Snare | Create a local gravity field that pulls eligible targets toward an anchor while excluding allies and clamping acceleration. | A performer samples affected bodies each tick and applies clamped impulses according to performer physics rules. | Implementable because target masks and clamps are declared; extensible with custom field equations. |
-| Soft Repair | Find damaged soft or living material, spend available energy, restore integrity gradually, and stop at a safety threshold. | A performer maps repair to health, tissue, mesh constraints, or soft-body coefficients depending on game systems. | Implementable without mandating one health model; extensible with domain-specific repair vocabularies. |
+### JSON spell representation
+
+```json
+{
+  "spell_type": "ogmr.thermal_lift",
+  "attributes": {
+    "target": "selected_volume",
+    "heat_joules": 1200,
+    "lift_newtons": 35,
+    "duration_seconds": 3
+  },
+  "requirements": [
+    "ogmr.capability.thermal",
+    "ogmr.capability.force"
+  ],
+  "bounds": {
+    "max_area_m2": 4,
+    "max_duration_seconds": 3,
+    "max_temperature_delta_c": 20,
+    "max_force_newtons": 35
+  },
+  "provenance": {
+    "generator": "example.validation",
+    "seed": 4242
+  }
+}
+```
+
+### JSON magic representation
+
+```json
+{
+  "version": 1,
+  "format": "message_passing",
+  "entry_point": "cast_message",
+  "spells": [
+    {
+      "spell_type": "ogmr.thermal_lift",
+      "attributes": {
+        "target": "selected_volume",
+        "heat_joules": 1200,
+        "lift_newtons": 35,
+        "duration_seconds": 3
+      },
+      "requirements": [
+        "ogmr.capability.thermal",
+        "ogmr.capability.force"
+      ],
+      "bounds": {
+        "max_area_m2": 4,
+        "max_duration_seconds": 3,
+        "max_temperature_delta_c": 20,
+        "max_force_newtons": 35
+      },
+      "provenance": {
+        "generator": "example.validation",
+        "seed": 4242
+      }
+    }
+  ],
+  "actors": [
+    {
+      "handle": "thermal_lift_actor",
+      "spell": 0
+    }
+  ],
+  "channels": [
+    {
+      "handle": "cast_events",
+      "to": "thermal_lift_actor"
+    }
+  ],
+  "messages": [
+    {
+      "channel": "cast_events",
+      "payload": {
+        "target": "selected_volume"
+      }
+    }
+  ]
+}
+```
+
+### Performer pseudocode
+
+```text
+function performThermalLift(magic, world):
+    interpreted = interpreter.validateAndResolve(magic)
+    spell = interpreted.spells[0]              # structural position, not an id
+    requireCapability("ogmr.capability.thermal")
+    requireCapability("ogmr.capability.force")
+    target = world.resolveVolume(spell.attributes.target)
+    assert target.area <= spell.bounds.max_area_m2
+    heat = min(spell.attributes.heat_joules, heatForDelta(target, spell.bounds.max_temperature_delta_c))
+    force = min(spell.attributes.lift_newtons, spell.bounds.max_force_newtons)
+    world.addHeat(target, heat)
+    world.applyForce(target, vector(0, force, 0), spell.attributes.duration_seconds)
+    world.scheduleCleanup(target, spell.attributes.duration_seconds)
+```
+
+### What the magic does
+
+This magic performs a bounded Thermal Lift. The generated spell selects a target volume, adds no more than the declared heat limit, converts the heated air into an upward force, and removes the force after three seconds. The magic structure composes the spell by a local actor and channel handle, so validation proves the performer can execute the spell without relying on a generated spell id.
 
 ## Implementability and extensibility check
 

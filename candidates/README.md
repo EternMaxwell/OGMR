@@ -57,6 +57,7 @@ or any other domain model.
 - Represent physical-world concepts through abstract targets, quantities,
   constraints, fields, events, and capability requirements rather than through
   one fixed engine model.
+- Make validation examples concrete: show a JSON spell representation, a JSON magic representation, performer pseudocode, and a description of what the magic does.
 
 ## Common representation pipeline
 
