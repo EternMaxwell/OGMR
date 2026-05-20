@@ -60,6 +60,19 @@ modify fluid and thermal simulations directly.
 - Performers can optimize pure subgraphs, cache queries, or parallelize
   independent branches.
 
+## Representation and interpreter
+
+- **JSON representation**: an object with `nodes`, `edges`, `inputs`, and
+  `outputs`, using explicit node ids and named ports for clarity.
+- **Dedicated tightened format**: a canonical graph table with interned node
+  types, port names, value types, and edge endpoints encoded as integer indices.
+  The tightened form should include a validated topological order so runtime
+  loading does not need expensive graph analysis.
+- **Interpreter output**: a `MagicGraph`-style structure containing node records,
+  port descriptors, edge lists, adjacency tables, topological execution order,
+  typed constants, requirement sets, extension payloads, and diagnostics. A
+  performer receives an already-resolved acyclic graph.
+
 ## Strengths
 
 - Excellent for reusable computation and shared dependencies.

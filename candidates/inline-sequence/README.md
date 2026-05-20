@@ -56,6 +56,19 @@ names abstract operations and required capabilities instead of engine APIs.
 - Performer policies define whether unknown operations fail, no-op, approximate,
   or defer to game plugins.
 
+## Representation and interpreter
+
+- **JSON representation**: an object with initial `context`, ordered `spells`,
+  and execution `policies`. It should preserve source-friendly spell ids and
+  context key names.
+- **Dedicated tightened format**: a compact instruction stream with an interned
+  operation table, typed literal pool, context slot table, and policy header.
+  Reads and writes should reference context slots by integer id instead of name.
+- **Interpreter output**: a `MagicProgram`-style structure containing ordered
+  instructions, context slot descriptors, literal tables, resolved read/write
+  sets, requirement sets, extension payloads, and diagnostics. A performer can
+  execute or compile the program without parsing authoring data.
+
 ## Strengths
 
 - Simple to parse, debug, replay, and record.

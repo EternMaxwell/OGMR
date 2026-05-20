@@ -59,6 +59,20 @@ heavy games can provide fine-grained physical events.
 - Recursion and scheduling policies can evolve independently from action
   vocabularies.
 
+## Representation and interpreter
+
+- **JSON representation**: an object with shared `state`, `rules`, lifecycle
+  policies, and explicit event-condition-action records.
+- **Dedicated tightened format**: a compact rule table with interned event
+  patterns, condition operators, action types, state slots, lifecycle tokens,
+  and limit policies. The tightened form should pre-resolve rule priorities and
+  event subscription groups.
+- **Interpreter output**: a `MagicRuleSet`-style structure containing state
+  descriptors, rule records, event subscription indexes, condition trees or
+  bytecode, action lists, lifecycle policies, requirement sets, extension
+  payloads, and diagnostics. A performer can subscribe and evaluate rules
+  without parsing authoring syntax.
+
 ## Strengths
 
 - Excellent for persistent and environmental magic.

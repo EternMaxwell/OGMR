@@ -53,6 +53,20 @@ gameplay stats, visual-only effects, or another world model.
 - Capability requirements let performers negotiate support.
 - Metadata can include editor-only hints without changing runtime semantics.
 
+## Representation and interpreter
+
+- **JSON representation**: a nested object where each spell node owns its
+  `children` array. This should be the primary source-control and editor format.
+- **Dedicated tightened format**: a canonical pre-order node stream with compact
+  symbol tables for spell types, roles, attribute names, and requirement names.
+  Each node can store parent index, first-child index, child count, and attribute
+  range so loaders do not need recursive parsing.
+- **Interpreter output**: a `MagicTree`-style structure containing the root node
+  index, a flat node array, resolved child ranges, interned strings, typed
+  attributes, requirement sets, extension payloads, and diagnostics. A performer
+  can traverse this structure without knowing whether the source was JSON or the
+  tightened format.
+
 ## Strengths
 
 - Easy for humans and tools to read.

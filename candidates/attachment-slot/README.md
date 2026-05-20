@@ -55,6 +55,21 @@ performer chooses the concrete representation.
 - Resolution policies can be extended for stacking and conflict handling.
 - Games can expose custom anchors without changing OGMR's core concepts.
 
+## Representation and interpreter
+
+- **JSON representation**: an object with `anchors`, `attachments`,
+  `compatibility`, and `resolution` sections. Human-readable anchor and slot ids
+  should remain visible for tools.
+- **Dedicated tightened format**: compact anchor and attachment tables with
+  interned anchor kinds, slot names, attachment types, role names, compatibility
+  tags, and resolution policy tokens. Attachment targets should be encoded as
+  integer references.
+- **Interpreter output**: a `MagicAttachmentSet`-style structure containing
+  anchor records, attachment records, slot occupancy maps, target links,
+  resolved compatibility data, stacking policies, requirement sets, extension
+  payloads, and diagnostics. A performer can resolve active attachments without
+  reparsing slot rules.
+
 ## Strengths
 
 - Natural for modular magic construction.

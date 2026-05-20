@@ -61,6 +61,19 @@ might resolve actual fluid cells.
 - Multiple schemas can coexist in one magic record.
 - Performer capability negotiation can happen per component.
 
+## Representation and interpreter
+
+- **JSON representation**: an object with a `components` map or array, optional
+  `relations`, and per-component schema/version information.
+- **Dedicated tightened format**: a canonical component table with interned
+  component types, schema ids, attribute names, relation endpoints, and compact
+  typed attribute blocks. Components should be sorted by stable id or type for
+  deterministic loading.
+- **Interpreter output**: a `MagicComponentSet`-style structure containing
+  component records, type-indexed lookup tables, relation lists, typed
+  attributes, requirement sets, extension payloads, and diagnostics. A performer
+  can query components directly without caring about the serialized source.
+
 ## Strengths
 
 - Very data-oriented and friendly to ECS-style engines.
