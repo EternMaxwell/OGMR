@@ -19,8 +19,8 @@ ordering.
 
 Each magic graph should contain:
 
-- `magic_id` and `version`.
-- `nodes`: spell definitions keyed by stable ids.
+- `version` and optional composition name.
+- `nodes`: spell definitions keyed by structural references.
 - `edges`: connections from one node output to another node input.
 - `inputs`: external values supplied by the game, caster, item, environment, or
   scripting layer.
@@ -94,14 +94,14 @@ modify fluid and thermal simulations directly.
 
 ## Procedural generation
 
-This candidate supports procedural generation. Generators can create spell structures from templates, random seeds, player choices, world queries, or authored rule sets, then assemble them into a magic structure. Generated magic must preserve provenance, deterministic seeds when useful, stable ids, version fields, capability requirements, and hard bounds for area, duration, intensity, recursion, spawned objects, and simulation cost.
+This candidate supports procedural spell generation. Generators create spell structures from templates, random seeds, player choices, world queries, or authored rule sets, then a separately authored or interpreted magic structure composes those generated spells. Generated spells must not rely on ids as usable fields; composition uses structural position, local handles, content-derived references, or candidate-specific links. Generated spells must preserve provenance, deterministic seeds when useful, version fields, capability requirements, and hard bounds for area, duration, intensity, recursion, spawned objects, and simulation cost.
 
 ## Separate spell and magic structures
 
 Spell and magic are different structures.
 
-- **Spell structure**: one reusable unit of intent with `spell_id`, `spell_type`, typed attributes, declared inputs/outputs when relevant, requirements, metadata, validation bounds, and extension payloads.
-- **Magic structure**: a composition/container with `magic_id`, format version, the candidate-specific topology, entry points, performer policies, generation provenance, global requirements, and interpreter diagnostics.
+- **Spell structure**: one reusable or procedurally generated unit of intent with `spell_type`, typed attributes, declared inputs/outputs when relevant, requirements, metadata, validation bounds, generator provenance, and extension payloads. It must not require a usable id.
+- **Magic structure**: a composition/container with format version, the candidate-specific topology, entry points, performer policies, global requirements, and interpreter diagnostics. It may name the composition, but spell addressing inside it must use topology/local handles rather than generated spell ids.
 
 The interpreter keeps this separation while resolving many spells into one performer-facing magic object. It validates and lowers data, but it does not apply effects to a game world.
 
@@ -117,4 +117,4 @@ The interpreter keeps this separation while resolving many spells into one perfo
 
 ## Implementability and extensibility check
 
-This candidate is implementable when the interpreter can validate its topology, resolve spell ids, check capability requirements, and produce a bounded performer input structure. It is extensible because spell types, attributes, requirements, generation metadata, and extension payloads are namespaced and can be preserved even when a performer only partially supports them.
+This candidate is implementable when the interpreter can validate its topology, resolve structural spell references, check capability requirements, and produce a bounded performer input structure. It is extensible because spell types, attributes, requirements, generation metadata, and extension payloads are namespaced and can be preserved even when a performer only partially supports them.

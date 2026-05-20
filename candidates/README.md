@@ -24,7 +24,7 @@ or any other domain model.
 - [Rule Reaction Format](rule-reaction/README.md): event/condition/action magic rules.
 - [Layer Stack Format](layer-stack/README.md): ordered layers, masks, blends, overrides, and accumulators.
 - [State Machine Format](state-machine/README.md): states, transitions, guards, actions, and lifecycle phases.
-- [Grammar Template Format](grammar-template/README.md): procedural grammars and templates that expand into concrete magic.
+- [Grammar Template Format](grammar-template/README.md): procedural grammars and templates that expand into concrete spell structures.
 - [Constraint Solver Format](constraint-solver/README.md): variables, constraints, objectives, bounds, and solver policies.
 - [Field Network Format](field-network/README.md): sources, sinks, transforms, samplers, and spatial or abstract fields.
 - [Timeline Track Format](timeline-track/README.md): timed tracks, clips, curves, markers, and synchronization rules.
@@ -38,7 +38,7 @@ or any other domain model.
 ## Shared design goals
 
 - Keep OGMR declarative and serializable.
-- Procedural generation should be a first-class use case with provenance, bounds, deterministic seeds where useful, and validation before performer use.
+- Spell procedural generation should be a first-class use case: generators create spell structures, while magic structures compose generated or authored spells. Generated spells must use structural position, local handles, or content-derived references instead of ids, and must include provenance, bounds, deterministic seeds where useful, and validation before performer use.
 - Keep spell structures and magic structures separate: spells are reusable units of intent, while magic is the composition/container that arranges many spells.
 - Make every candidate representable as JSON for tooling, interchange,
   debugging, and schema validation.
@@ -52,8 +52,8 @@ or any other domain model.
 - Avoid game-specific effect implementations in the format.
 - Let performers advertise supported capabilities and reject, approximate, or
   partially apply unsupported spells.
-- Use stable identifiers, extensible metadata, namespaced attributes, and version
-  fields so each candidate can evolve without breaking existing content.
+- Use structural references, local handles, extensible metadata, namespaced attributes, and version
+  fields so procedurally generated spells do not depend on ids and each candidate can evolve without breaking existing content.
 - Represent physical-world concepts through abstract targets, quantities,
   constraints, fields, events, and capability requirements rather than through
   one fixed engine model.

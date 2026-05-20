@@ -7,12 +7,12 @@ This candidate represents magic through variables, constraints, objectives, boun
 ## Core concepts
 
 - **Spell**: one declarative unit in the variables, constraints, objectives, bounds, and solver policies model, with typed attributes, requirements, validation bounds, metadata, and extension data.
-- **Magic**: the complete variables, constraints, objectives, bounds, and solver policies composition containing many spells, entry points, policies, provenance, and diagnostics.
+- **Magic**: the complete variables, constraints, objectives, bounds, and solver policies composition containing many spells, entry points, policies, spell provenance summaries, and diagnostics.
 - **Performer**: a game-provided runtime that consumes the interpreted magic structure and maps abstract effects to the concrete world.
 
 ## Structural model
 
-Each spell structure contains `spell_id`, `spell_type`, typed attributes, requirements, metadata, bounds, and extension payloads. Each magic structure contains `magic_id`, `version`, the variables, constraints, objectives, bounds, and solver policies topology, entry points, policies, generation provenance, global requirements, and validation diagnostics.
+Each spell structure contains `spell_type`, typed attributes, requirements, metadata, bounds, generator provenance, and extension payloads, but not a required id. Each magic structure contains `version`, the variables, constraints, objectives, bounds, and solver policies topology, entry points, policies, spell provenance summaries, global requirements, and validation diagnostics.
 
 ## How it describes physical worlds
 
@@ -23,24 +23,24 @@ The format describes targets, quantities, materials, fields, constraints, state,
 - Namespaced spell and magic fields allow standard and game-specific vocabularies.
 - Capability requirements allow rejection, approximation, fallback, or partial support.
 - Extension payloads survive interpretation for tools and game plugins.
-- Procedural generation bounds keep generated magic safe for real-time worlds.
+- Procedural spell-generation bounds keep generated spells safe for real-time worlds.
 
 ## Representation and interpreter
 
-- **JSON representation**: a readable object containing the variables, constraints, objectives, bounds, and solver policies topology, spell structures, magic structure, requirements, policies, provenance, and metadata.
+- **JSON representation**: a readable object containing the variables, constraints, objectives, bounds, and solver policies topology, spell structures, magic structure, requirements, policies, spell provenance summaries, and metadata.
 - **Dedicated tightened format**: a compact canonical encoding with interned strings, typed attribute blocks, integer references, prevalidated topology tables, and bounded resource headers.
-- **Interpreter output**: a `MagicConstraintSolver` structure containing resolved spells, candidate topology, lookup tables, typed attributes, requirements, generation provenance, extension payloads, and diagnostics.
+- **Interpreter output**: a `MagicConstraintSolver` structure containing resolved spells, candidate topology, lookup tables, typed attributes, requirements, spell provenance summaries, extension payloads, and diagnostics.
 
 ## Procedural generation
 
-This candidate supports procedural generation. Generators can create spell structures from templates, random seeds, player choices, world queries, or authored rule sets, then assemble them into a magic structure. Generated magic must preserve provenance, deterministic seeds when useful, stable ids, version fields, capability requirements, and hard bounds for area, duration, intensity, recursion, spawned objects, and simulation cost.
+This candidate supports procedural spell generation. Generators create spell structures from templates, random seeds, player choices, world queries, or authored rule sets, then a separately authored or interpreted magic structure composes those generated spells. Generated spells must not rely on ids as usable fields; composition uses structural position, local handles, content-derived references, or candidate-specific links. Generated spells must preserve provenance, deterministic seeds when useful, version fields, capability requirements, and hard bounds for area, duration, intensity, recursion, spawned objects, and simulation cost.
 
 ## Separate spell and magic structures
 
 Spell and magic are different structures.
 
-- **Spell structure**: one reusable unit of intent with `spell_id`, `spell_type`, typed attributes, declared inputs/outputs when relevant, requirements, metadata, validation bounds, and extension payloads.
-- **Magic structure**: a composition/container with `magic_id`, format version, the candidate-specific topology, entry points, performer policies, generation provenance, global requirements, and interpreter diagnostics.
+- **Spell structure**: one reusable or procedurally generated unit of intent with `spell_type`, typed attributes, declared inputs/outputs when relevant, requirements, metadata, validation bounds, generator provenance, and extension payloads. It must not require a usable id.
+- **Magic structure**: a composition/container with format version, the candidate-specific topology, entry points, performer policies, global requirements, and interpreter diagnostics. It may name the composition, but spell addressing inside it must use topology/local handles rather than generated spell ids.
 
 The interpreter keeps this separation while resolving many spells into one performer-facing magic object. It validates and lowers data, but it does not apply effects to a game world.
 
@@ -56,11 +56,11 @@ The interpreter keeps this separation while resolving many spells into one perfo
 
 ## Implementability and extensibility check
 
-This candidate is implementable if its interpreter can validate the topology, enforce generation bounds, resolve spell references, and emit a deterministic performer input structure. It is extensible because new spell types, attributes, policies, and extension payloads can be added under namespaces without changing the performer boundary.
+This candidate is implementable if its interpreter can validate the topology, enforce generation bounds, resolve structural spell references, and emit a deterministic performer input structure. It is extensible because new spell types, attributes, policies, and extension payloads can be added under namespaces without changing the performer boundary.
 
 ## Strengths
 
-- Supports authored and procedural magic.
+- Supports authored magic composed from generated or authored spells.
 - Keeps spell format and magic format separate.
 - Has JSON interchange and a tightened production representation.
 - Gives performers resolved data instead of raw authoring syntax.
@@ -68,11 +68,11 @@ This candidate is implementable if its interpreter can validate the topology, en
 ## Tradeoffs
 
 - Requires candidate-specific validation.
-- Generated content needs strict bounds.
+- Generated spells need strict bounds.
 - Advanced worlds may need game-specific extension vocabularies.
 
 ## Best use cases
 
 - Games whose tooling naturally matches this composition model.
-- Procedural generation pipelines.
+- Procedural spell-generation pipelines.
 - Performers that want safe, resolved, capability-checked magic data.
