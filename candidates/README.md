@@ -22,10 +22,24 @@ or any other domain model.
 - [Attribute Component Format](attribute-component/README.md): data-oriented spell bundles.
 - [Attachment Slot Format](attachment-slot/README.md): socketed spells attached to anchors.
 - [Rule Reaction Format](rule-reaction/README.md): event/condition/action magic rules.
+- [Layer Stack Format](layer-stack/README.md): ordered layers, masks, blends, overrides, and accumulators.
+- [State Machine Format](state-machine/README.md): states, transitions, guards, actions, and lifecycle phases.
+- [Grammar Template Format](grammar-template/README.md): procedural grammars and templates that expand into concrete magic.
+- [Constraint Solver Format](constraint-solver/README.md): variables, constraints, objectives, bounds, and solver policies.
+- [Field Network Format](field-network/README.md): sources, sinks, transforms, samplers, and spatial or abstract fields.
+- [Timeline Track Format](timeline-track/README.md): timed tracks, clips, curves, markers, and synchronization rules.
+- [Blackboard Format](blackboard/README.md): shared facts read and written by scheduled spell rules.
+- [Entity Recipe Format](entity-recipe/README.md): entity creation, component mutation, links, and cleanup recipes.
+- [Message Passing Format](message-passing/README.md): spell actors, channels, handlers, and typed messages.
+- [Algebraic Expression Format](algebraic-expression/README.md): typed expressions, functions, formulas, and effect constructors.
+- [Behavior Tree Format](behavior-tree/README.md): selectors, sequences, decorators, conditions, and action leaves.
+- [Patch Delta Format](patch-delta/README.md): declarative patches that add, replace, scale, or remove world properties.
 
 ## Shared design goals
 
 - Keep OGMR declarative and serializable.
+- Procedural generation should be a first-class use case with provenance, bounds, deterministic seeds where useful, and validation before performer use.
+- Keep spell structures and magic structures separate: spells are reusable units of intent, while magic is the composition/container that arranges many spells.
 - Make every candidate representable as JSON for tooling, interchange,
   debugging, and schema validation.
 - Treat JSON as a portable representation, not necessarily the final runtime
