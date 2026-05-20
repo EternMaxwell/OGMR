@@ -44,9 +44,13 @@ Spell and magic are different structures.
 
 The interpreter keeps this separation while resolving many spells into one performer-facing magic object. It validates and lowers data, but it does not apply effects to a game world.
 
-## Validation example
+## Validation examples
 
-### JSON spell representation
+Each candidate includes at least five concrete validation examples. Every example separates the generated spell data from the candidate-specific magic container, shows performer-facing pseudocode, and describes the intended runtime behavior.
+
+### Example 1: Thermal Lift
+
+#### JSON spell representation
 
 ```json
 {
@@ -74,13 +78,12 @@ The interpreter keeps this separation while resolving many spells into one perfo
 }
 ```
 
-### JSON magic representation
+#### JSON magic representation
 
 ```json
 {
   "version": 1,
   "format": "constraint_solver",
-  "entry_point": "solve_lift",
   "spells": [
     {
       "spell_type": "ogmr.thermal_lift",
@@ -106,32 +109,33 @@ The interpreter keeps this separation while resolving many spells into one perfo
       }
     }
   ],
+  "entry_point": "solve_thermal_lift",
   "variables": {
-    "temperature_delta_c": {
+    "effect_strength": {
       "min": 0,
-      "max": 20
+      "max": 1
     },
-    "force_newtons": {
+    "duration_seconds": {
       "min": 0,
-      "max": 35
+      "max": 3
     }
   },
   "constraints": [
     {
       "spell": 0,
-      "requires": "force_newtons <= 35 and temperature_delta_c <= 20"
+      "requires": "all declared bounds must hold"
     }
   ],
-  "objective": "maximize_lift_without_exceeding_bounds"
+  "objective": "perform_thermal_lift_within_bounds"
 }
 ```
 
-### Performer pseudocode
+#### Performer pseudocode
 
 ```text
-function performThermalLift(magic, world):
+function performThermalLift(magic, world, caster):
     interpreted = interpreter.validateAndResolve(magic)
-    spell = interpreted.spells[0]              # structural position, not an id
+    spell = interpreted.spells[0]  # structural position, not a generated id
     requireCapability("ogmr.capability.thermal")
     requireCapability("ogmr.capability.force")
     target = world.resolveVolume(spell.attributes.target)
@@ -143,9 +147,427 @@ function performThermalLift(magic, world):
     world.scheduleCleanup(target, spell.attributes.duration_seconds)
 ```
 
-### What the magic does
+#### What the magic does
 
-This magic performs a bounded Thermal Lift. The generated spell selects a target volume, adds no more than the declared heat limit, converts the heated air into an upward force, and removes the force after three seconds. The magic structure composes the spell by solver variables and constraints that refer to the first spell structurally, so validation proves the performer can execute the spell without relying on a generated spell id.
+The spell selects a target volume, adds bounded heat, converts the heated air into upward force, and removes the force after the declared duration. In this candidate, the magic composes the spell through solver variables and constraints, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+
+### Example 2: Water Wall
+
+#### JSON spell representation
+
+```json
+{
+  "spell_type": "ogmr.water_wall",
+  "attributes": {
+    "source": "nearby_water",
+    "shape": "wall",
+    "length_m": 5,
+    "height_m": 2,
+    "duration_seconds": 6
+  },
+  "requirements": [
+    "ogmr.capability.material.water",
+    "ogmr.capability.shape_barrier"
+  ],
+  "bounds": {
+    "max_volume_liters": 800,
+    "max_length_m": 5,
+    "max_height_m": 2,
+    "max_duration_seconds": 6
+  },
+  "provenance": {
+    "generator": "example.validation",
+    "seed": 5150
+  }
+}
+```
+
+#### JSON magic representation
+
+```json
+{
+  "version": 1,
+  "format": "constraint_solver",
+  "spells": [
+    {
+      "spell_type": "ogmr.water_wall",
+      "attributes": {
+        "source": "nearby_water",
+        "shape": "wall",
+        "length_m": 5,
+        "height_m": 2,
+        "duration_seconds": 6
+      },
+      "requirements": [
+        "ogmr.capability.material.water",
+        "ogmr.capability.shape_barrier"
+      ],
+      "bounds": {
+        "max_volume_liters": 800,
+        "max_length_m": 5,
+        "max_height_m": 2,
+        "max_duration_seconds": 6
+      },
+      "provenance": {
+        "generator": "example.validation",
+        "seed": 5150
+      }
+    }
+  ],
+  "entry_point": "solve_water_wall",
+  "variables": {
+    "effect_strength": {
+      "min": 0,
+      "max": 1
+    },
+    "duration_seconds": {
+      "min": 0,
+      "max": 6
+    }
+  },
+  "constraints": [
+    {
+      "spell": 0,
+      "requires": "all declared bounds must hold"
+    }
+  ],
+  "objective": "perform_water_wall_within_bounds"
+}
+```
+
+#### Performer pseudocode
+
+```text
+function performWaterWall(magic, world, caster):
+    interpreted = interpreter.validateAndResolve(magic)
+    spell = interpreted.spells[0]  # structural position, not a generated id
+    requireCapability("ogmr.capability.material.water")
+    requireCapability("ogmr.capability.shape_barrier")
+    water = world.collectMaterial(spell.attributes.source, spell.bounds.max_volume_liters)
+    assert spell.attributes.length_m <= spell.bounds.max_length_m
+    assert spell.attributes.height_m <= spell.bounds.max_height_m
+    barrier = world.shapeBarrier(water, spell.attributes.shape, spell.attributes.length_m, spell.attributes.height_m)
+    world.addCohesion(barrier, until=spell.attributes.duration_seconds)
+    world.scheduleRelease(barrier, spell.attributes.duration_seconds)
+```
+
+#### What the magic does
+
+The spell gathers available water or water-tagged entities, shapes them into a bounded barrier, increases cohesion, and releases the water when the duration expires. In this candidate, the magic composes the spell through solver variables and constraints, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+
+### Example 3: Stone Brace
+
+#### JSON spell representation
+
+```json
+{
+  "spell_type": "ogmr.stone_brace",
+  "attributes": {
+    "target": "touched_structure",
+    "stiffness_multiplier": 1.5,
+    "fracture_bonus": 0.25,
+    "duration_seconds": 8
+  },
+  "requirements": [
+    "ogmr.capability.material.stone",
+    "ogmr.capability.modify_structure"
+  ],
+  "bounds": {
+    "max_mass_kg": 2000,
+    "max_stiffness_multiplier": 1.5,
+    "max_fracture_bonus": 0.25,
+    "max_duration_seconds": 8
+  },
+  "provenance": {
+    "generator": "example.validation",
+    "seed": 6161
+  }
+}
+```
+
+#### JSON magic representation
+
+```json
+{
+  "version": 1,
+  "format": "constraint_solver",
+  "spells": [
+    {
+      "spell_type": "ogmr.stone_brace",
+      "attributes": {
+        "target": "touched_structure",
+        "stiffness_multiplier": 1.5,
+        "fracture_bonus": 0.25,
+        "duration_seconds": 8
+      },
+      "requirements": [
+        "ogmr.capability.material.stone",
+        "ogmr.capability.modify_structure"
+      ],
+      "bounds": {
+        "max_mass_kg": 2000,
+        "max_stiffness_multiplier": 1.5,
+        "max_fracture_bonus": 0.25,
+        "max_duration_seconds": 8
+      },
+      "provenance": {
+        "generator": "example.validation",
+        "seed": 6161
+      }
+    }
+  ],
+  "entry_point": "solve_stone_brace",
+  "variables": {
+    "effect_strength": {
+      "min": 0,
+      "max": 1
+    },
+    "duration_seconds": {
+      "min": 0,
+      "max": 8
+    }
+  },
+  "constraints": [
+    {
+      "spell": 0,
+      "requires": "all declared bounds must hold"
+    }
+  ],
+  "objective": "perform_stone_brace_within_bounds"
+}
+```
+
+#### Performer pseudocode
+
+```text
+function performStoneBrace(magic, world, caster):
+    interpreted = interpreter.validateAndResolve(magic)
+    spell = interpreted.spells[0]  # structural position, not a generated id
+    requireCapability("ogmr.capability.material.stone")
+    requireCapability("ogmr.capability.modify_structure")
+    structure = world.resolveStructure(spell.attributes.target)
+    assert structure.mass <= spell.bounds.max_mass_kg
+    original = world.snapshotMaterial(structure)
+    world.scaleStiffness(structure, min(spell.attributes.stiffness_multiplier, spell.bounds.max_stiffness_multiplier))
+    world.addFractureThreshold(structure, min(spell.attributes.fracture_bonus, spell.bounds.max_fracture_bonus))
+    world.restoreMaterial(structure, original, after=spell.attributes.duration_seconds)
+```
+
+#### What the magic does
+
+The spell reinforces a touched stone or structure by bounded stiffness and fracture modifiers, records the original material state, and restores it after expiry. In this candidate, the magic composes the spell through solver variables and constraints, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+
+### Example 4: Gravity Snare
+
+#### JSON spell representation
+
+```json
+{
+  "spell_type": "ogmr.gravity_snare",
+  "attributes": {
+    "anchor": "caster_focus",
+    "radius_m": 6,
+    "pull_newtons": 40,
+    "duration_seconds": 4,
+    "exclude_tags": [
+      "ally"
+    ]
+  },
+  "requirements": [
+    "ogmr.capability.gravity_field",
+    "ogmr.capability.target_filter"
+  ],
+  "bounds": {
+    "max_radius_m": 6,
+    "max_pull_newtons": 40,
+    "max_targets": 10,
+    "max_duration_seconds": 4
+  },
+  "provenance": {
+    "generator": "example.validation",
+    "seed": 7171
+  }
+}
+```
+
+#### JSON magic representation
+
+```json
+{
+  "version": 1,
+  "format": "constraint_solver",
+  "spells": [
+    {
+      "spell_type": "ogmr.gravity_snare",
+      "attributes": {
+        "anchor": "caster_focus",
+        "radius_m": 6,
+        "pull_newtons": 40,
+        "duration_seconds": 4,
+        "exclude_tags": [
+          "ally"
+        ]
+      },
+      "requirements": [
+        "ogmr.capability.gravity_field",
+        "ogmr.capability.target_filter"
+      ],
+      "bounds": {
+        "max_radius_m": 6,
+        "max_pull_newtons": 40,
+        "max_targets": 10,
+        "max_duration_seconds": 4
+      },
+      "provenance": {
+        "generator": "example.validation",
+        "seed": 7171
+      }
+    }
+  ],
+  "entry_point": "solve_gravity_snare",
+  "variables": {
+    "effect_strength": {
+      "min": 0,
+      "max": 1
+    },
+    "duration_seconds": {
+      "min": 0,
+      "max": 4
+    }
+  },
+  "constraints": [
+    {
+      "spell": 0,
+      "requires": "all declared bounds must hold"
+    }
+  ],
+  "objective": "perform_gravity_snare_within_bounds"
+}
+```
+
+#### Performer pseudocode
+
+```text
+function performGravitySnare(magic, world, caster):
+    interpreted = interpreter.validateAndResolve(magic)
+    spell = interpreted.spells[0]  # structural position, not a generated id
+    requireCapability("ogmr.capability.gravity_field")
+    requireCapability("ogmr.capability.target_filter")
+    anchor = world.resolveAnchor(spell.attributes.anchor)
+    assert spell.attributes.radius_m <= spell.bounds.max_radius_m
+    targets = world.findBodiesNear(anchor, spell.attributes.radius_m, exclude=spell.attributes.exclude_tags, limit=spell.bounds.max_targets)
+    pull = min(spell.attributes.pull_newtons, spell.bounds.max_pull_newtons)
+    for body in targets: world.applyForceToward(body, anchor, pull, spell.attributes.duration_seconds)
+    world.scheduleCleanup(targets, spell.attributes.duration_seconds)
+```
+
+#### What the magic does
+
+The spell creates a local gravity field around an anchor, filters excluded targets, clamps pull strength and target count, and applies temporary inward force. In this candidate, the magic composes the spell through solver variables and constraints, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+
+### Example 5: Soft Repair
+
+#### JSON spell representation
+
+```json
+{
+  "spell_type": "ogmr.soft_repair",
+  "attributes": {
+    "target": "damaged_soft_material",
+    "repair_points": 30,
+    "energy_cost": 12,
+    "duration_seconds": 5,
+    "stop_at_integrity": 0.9
+  },
+  "requirements": [
+    "ogmr.capability.repair",
+    "ogmr.capability.soft_material"
+  ],
+  "bounds": {
+    "max_repair_points": 30,
+    "max_energy_cost": 12,
+    "max_duration_seconds": 5,
+    "max_integrity": 0.9
+  },
+  "provenance": {
+    "generator": "example.validation",
+    "seed": 8181
+  }
+}
+```
+
+#### JSON magic representation
+
+```json
+{
+  "version": 1,
+  "format": "constraint_solver",
+  "spells": [
+    {
+      "spell_type": "ogmr.soft_repair",
+      "attributes": {
+        "target": "damaged_soft_material",
+        "repair_points": 30,
+        "energy_cost": 12,
+        "duration_seconds": 5,
+        "stop_at_integrity": 0.9
+      },
+      "requirements": [
+        "ogmr.capability.repair",
+        "ogmr.capability.soft_material"
+      ],
+      "bounds": {
+        "max_repair_points": 30,
+        "max_energy_cost": 12,
+        "max_duration_seconds": 5,
+        "max_integrity": 0.9
+      },
+      "provenance": {
+        "generator": "example.validation",
+        "seed": 8181
+      }
+    }
+  ],
+  "entry_point": "solve_soft_repair",
+  "variables": {
+    "effect_strength": {
+      "min": 0,
+      "max": 1
+    },
+    "duration_seconds": {
+      "min": 0,
+      "max": 5
+    }
+  },
+  "constraints": [
+    {
+      "spell": 0,
+      "requires": "all declared bounds must hold"
+    }
+  ],
+  "objective": "perform_soft_repair_within_bounds"
+}
+```
+
+#### Performer pseudocode
+
+```text
+function performSoftRepair(magic, world, caster):
+    interpreted = interpreter.validateAndResolve(magic)
+    spell = interpreted.spells[0]  # structural position, not a generated id
+    requireCapability("ogmr.capability.repair")
+    requireCapability("ogmr.capability.soft_material")
+    target = world.resolveSoftMaterial(spell.attributes.target)
+    assert caster.energy >= spell.attributes.energy_cost
+    repair = min(spell.attributes.repair_points, spell.bounds.max_repair_points)
+    limit = min(spell.attributes.stop_at_integrity, spell.bounds.max_integrity)
+    world.spendEnergy(caster, spell.attributes.energy_cost)
+    world.repairGradually(target, repair, limit, spell.attributes.duration_seconds)
+```
+
+#### What the magic does
+
+The spell repairs damaged soft or living material gradually, spends bounded energy, and stops before exceeding the declared integrity threshold. In this candidate, the magic composes the spell through solver variables and constraints, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
 
 ## Implementability and extensibility check
 
