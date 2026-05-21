@@ -35,6 +35,75 @@ or any other domain model.
 - [Behavior Tree Format](behavior-tree/README.md): selectors, sequences, decorators, conditions, and action leaves.
 - [Patch Delta Format](patch-delta/README.md): declarative patches that add, replace, scale, or remove world properties.
 
+## Projectile explosion stress test
+
+Candidates must be tested against a multi-component projectile magic before they
+are considered viable. The stress-test magic emits a hot ball with initial
+velocity, either as a particle group or solid body. While moving, it emits hot
+fire particles that contribute heat to the heat map, and the ball itself also
+contributes heat. On collision, it explodes: the explosion can remove or damage
+falling-sand elements, damage solid-body and softbody structures, emit heat,
+spawn high-speed fragments and fire particles, and apply collision/pressure
+force either through particle collision when available or through a direct
+impulse fallback.
+
+The reference decomposition for this test is:
+
+```json
+{
+  "stress_test": "ogmr.projectile_explosion",
+  "required_spell_roles": [
+    "spawn_projectile_body_or_particle_group",
+    "set_initial_velocity",
+    "attach_heat_source_to_projectile",
+    "emit_hot_fire_particles_while_moving",
+    "sample_collision_event",
+    "damage_falling_sand_cells",
+    "damage_solid_body_and_softbody_regions",
+    "emit_explosion_heat",
+    "spawn_high_speed_fragments",
+    "spawn_explosion_fire_particles",
+    "apply_particle_collision_force_when_supported",
+    "apply_direct_impulse_pressure_fallback"
+  ],
+  "required_world_components": [
+    "gravity_map",
+    "grid_particle_fluid",
+    "falling_sand",
+    "solid_soft_body",
+    "heat_map_with_air"
+  ]
+}
+```
+
+Candidate status for this stress test:
+
+| Candidate | Status | Reason |
+| --- | --- | --- |
+| Tree | Pass | Can nest spawn, motion, trail, collision, explosion, fragment, heat, and fallback impulse spells under one projectile magic tree. |
+| DAG | Pass | Can model projectile spawn, trail emission, collision gate, explosion effects, and fallback impulse as dependent graph nodes. |
+| Inline Sequence | Pass | Can encode setup, update subscription, collision wait, explosion, and cleanup as ordered steps over shared context. |
+| Attribute Component | Pass | Can describe the projectile as components for body/particles, velocity, heat emission, collision trigger, explosion payload, damage, fragments, and impulse fallback. |
+| Attachment Slot | Pass | Can attach trail emitters, heat payloads, collision triggers, fragment emitters, and impulse fallback slots to a projectile anchor. |
+| Rule Reaction | Pass | Naturally represents moving heat emission and on-collision explosion as event-condition-action rules. |
+| Layer Stack | Pass | Can layer projectile body emission, heat contribution, trail particles, collision mask, explosion deltas, damage masks, fragment layer, and impulse fallback accumulators. |
+| State Machine | Pass | Can represent projectile lifecycle states such as spawned, moving, collided, exploding, fragmenting, and expired. |
+| Grammar Template | Pass | Can expand a projectile-explosion template into the required spell roles with bounded generated fragments and particles. |
+| Constraint Solver | Pass | Can represent bounded projectile/explosion variables, collision constraints, damage/heat objectives, fragment bounds, and impulse fallback policy. |
+| Field Network | Pass | Can connect moving sources, heat fields, particle emitters, collision samplers, explosion fields, damage samplers, fragment sources, and impulse fields. |
+| Timeline Track | Pass | Can place projectile setup, moving emission clips, collision-synchronized explosion clips, fragment clips, heat clips, and cleanup markers on tracks. |
+| Blackboard | Pass | Can use facts for projectile state, movement, collision, particle-collision support, explosion payload, damage targets, fragments, and fallback impulse decisions. |
+| Entity Recipe | Pass | Can create a projectile entity or particle group with velocity, heat/trail components, collision-trigger components, explosion payloads, damage mutations, fragments, and cleanup. |
+| Message Passing | Pass | Can model projectile, trail emitter, collision detector, explosion, damage, heat, fragment, and impulse actors exchanging typed messages. |
+| Algebraic Expression | Pass | Can compose expressions for projectile creation, movement, heat emission, collision predicate, explosion effects, fragment generation, and impulse fallback. |
+| Behavior Tree | Pass | Can sequence spawn/move behavior, run trail emission while moving, wait for collision, select particle-collision or direct-impulse force, then execute explosion effects. |
+| Patch Delta | Pass | Can patch in projectile state, velocity, heat/trail emission records, collision-trigger records, explosion damage/heat deltas, fragments, fire particles, and impulse fallback deltas. |
+
+No candidate currently fails this stress test. If a future candidate cannot
+represent all required spell roles and component interactions without
+game-specific helper functions, keep it in this list and mark its status as
+`Fail`.
+
 ## Shared design goals
 
 - Keep OGMR declarative and serializable.
