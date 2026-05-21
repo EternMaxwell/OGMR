@@ -57,7 +57,7 @@ or any other domain model.
 - Represent physical-world concepts through abstract targets, quantities,
   constraints, fields, events, and capability requirements rather than through
   one fixed engine model.
-- Make validation examples concrete: include at least five examples per candidate, and for each example show a JSON spell representation, a JSON magic representation, performer pseudocode, and a description of what the magic does.
+- Make validation examples concrete: include at least five examples per candidate, and for each example show a JSON spell representation, a JSON magic representation, performer pseudocode, and a description of what the magic does. Example pseudocode must assume `world` provides only low-level accessors and mutators over objects and fields, not direct magic-like operations such as gradual repair or barrier shaping.
 
 ## Common representation pipeline
 

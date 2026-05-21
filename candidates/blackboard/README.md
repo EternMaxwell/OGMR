@@ -46,7 +46,7 @@ The interpreter keeps this separation while resolving many spells into one perfo
 
 ## Validation examples
 
-Each candidate includes at least five concrete validation examples. Every example separates the generated spell data from the candidate-specific magic container, shows performer-facing pseudocode, and describes the intended runtime behavior.
+Each candidate includes at least five concrete validation examples. Every example separates the generated spell data from the candidate-specific magic container, shows performer-facing pseudocode, and describes the intended runtime behavior. The pseudocode assumes `world` exposes only low-level accessors and mutators such as `getObject`, `listObjects`, `createObject`, `setField`, and `appendEvent`; all magic-like behavior is computed by the performer from object fields.
 
 ### Example 1: Thermal Lift
 
@@ -138,13 +138,18 @@ function performThermalLift(magic, world, caster):
     spell = interpreted.spells[0]  # structural position, not a generated id
     requireCapability("ogmr.capability.thermal")
     requireCapability("ogmr.capability.force")
-    target = world.resolveVolume(spell.attributes.target)
-    assert target.area <= spell.bounds.max_area_m2
-    heat = min(spell.attributes.heat_joules, heatForDelta(target, spell.bounds.max_temperature_delta_c))
+    target = world.getObject(spell.attributes.target)
+    assert target.fields.area_m2 <= spell.bounds.max_area_m2
+    heat_capacity = max(target.fields.get("heat_capacity_j_per_c", 1), 1)
+    temperature_delta = min(spell.bounds.max_temperature_delta_c, spell.attributes.heat_joules / heat_capacity)
+    heat = min(spell.attributes.heat_joules, temperature_delta * heat_capacity)
     force = min(spell.attributes.lift_newtons, spell.bounds.max_force_newtons)
-    world.addHeat(target, heat)
-    world.applyForce(target, vector(0, force, 0), spell.attributes.duration_seconds)
-    world.scheduleCleanup(target, spell.attributes.duration_seconds)
+    world.setField(target, "heat_joules", target.fields.get("heat_joules", 0) + heat)
+    force_record = {"vector": [0, force, 0], "expires_after_seconds": spell.attributes.duration_seconds}
+    forces = list(target.fields.get("forces", []))
+    forces.append(force_record)
+    world.setField(target, "forces", forces)
+    world.appendEvent("remove_field_entry", {"object": target.handle, "field": "forces", "value": force_record, "after_seconds": spell.attributes.duration_seconds})
 ```
 
 #### What the magic does
@@ -243,12 +248,25 @@ function performWaterWall(magic, world, caster):
     spell = interpreted.spells[0]  # structural position, not a generated id
     requireCapability("ogmr.capability.material.water")
     requireCapability("ogmr.capability.shape_barrier")
-    water = world.collectMaterial(spell.attributes.source, spell.bounds.max_volume_liters)
+    water_sources = world.listObjects({"material": "water", "near": spell.attributes.source})
     assert spell.attributes.length_m <= spell.bounds.max_length_m
     assert spell.attributes.height_m <= spell.bounds.max_height_m
-    barrier = world.shapeBarrier(water, spell.attributes.shape, spell.attributes.length_m, spell.attributes.height_m)
-    world.addCohesion(barrier, until=spell.attributes.duration_seconds)
-    world.scheduleRelease(barrier, spell.attributes.duration_seconds)
+    remaining_liters = spell.bounds.max_volume_liters
+    gathered_liters = 0
+    for source in water_sources:
+        available = source.fields.get("available_liters", 0)
+        taken = min(available, remaining_liters)
+        if taken > 0:
+            world.setField(source, "available_liters", available - taken)
+            gathered_liters += taken
+            remaining_liters -= taken
+    barrier = world.createObject({"kind": "temporary_barrier", "material": "water"})
+    world.setField(barrier, "shape", spell.attributes.shape)
+    world.setField(barrier, "length_m", spell.attributes.length_m)
+    world.setField(barrier, "height_m", spell.attributes.height_m)
+    world.setField(barrier, "contained_liters", gathered_liters)
+    world.setField(barrier, "cohesion_until_seconds", spell.attributes.duration_seconds)
+    world.appendEvent("delete_object", {"object": barrier.handle, "after_seconds": spell.attributes.duration_seconds})
 ```
 
 #### What the magic does
@@ -345,12 +363,17 @@ function performStoneBrace(magic, world, caster):
     spell = interpreted.spells[0]  # structural position, not a generated id
     requireCapability("ogmr.capability.material.stone")
     requireCapability("ogmr.capability.modify_structure")
-    structure = world.resolveStructure(spell.attributes.target)
-    assert structure.mass <= spell.bounds.max_mass_kg
-    original = world.snapshotMaterial(structure)
-    world.scaleStiffness(structure, min(spell.attributes.stiffness_multiplier, spell.bounds.max_stiffness_multiplier))
-    world.addFractureThreshold(structure, min(spell.attributes.fracture_bonus, spell.bounds.max_fracture_bonus))
-    world.restoreMaterial(structure, original, after=spell.attributes.duration_seconds)
+    structure = world.getObject(spell.attributes.target)
+    assert structure.fields.mass_kg <= spell.bounds.max_mass_kg
+    original = {
+        "stiffness": structure.fields.get("stiffness", 1),
+        "fracture_threshold": structure.fields.get("fracture_threshold", 1)
+    }
+    stiffness_multiplier = min(spell.attributes.stiffness_multiplier, spell.bounds.max_stiffness_multiplier)
+    fracture_bonus = min(spell.attributes.fracture_bonus, spell.bounds.max_fracture_bonus)
+    world.setField(structure, "stiffness", original["stiffness"] * stiffness_multiplier)
+    world.setField(structure, "fracture_threshold", original["fracture_threshold"] + fracture_bonus)
+    world.appendEvent("restore_fields", {"object": structure.handle, "fields": original, "after_seconds": spell.attributes.duration_seconds})
 ```
 
 #### What the magic does
@@ -453,12 +476,25 @@ function performGravitySnare(magic, world, caster):
     spell = interpreted.spells[0]  # structural position, not a generated id
     requireCapability("ogmr.capability.gravity_field")
     requireCapability("ogmr.capability.target_filter")
-    anchor = world.resolveAnchor(spell.attributes.anchor)
+    anchor = world.getObject(spell.attributes.anchor)
     assert spell.attributes.radius_m <= spell.bounds.max_radius_m
-    targets = world.findBodiesNear(anchor, spell.attributes.radius_m, exclude=spell.attributes.exclude_tags, limit=spell.bounds.max_targets)
+    targets = []
+    for body in world.listObjects({"has_field": "position"}):
+        tags = body.fields.get("tags", [])
+        if any(tag in tags for tag in spell.attributes.exclude_tags):
+            continue
+        if distance(body.fields.position, anchor.fields.position) <= spell.attributes.radius_m:
+            targets.append(body)
+        if len(targets) == spell.bounds.max_targets:
+            break
     pull = min(spell.attributes.pull_newtons, spell.bounds.max_pull_newtons)
-    for body in targets: world.applyForceToward(body, anchor, pull, spell.attributes.duration_seconds)
-    world.scheduleCleanup(targets, spell.attributes.duration_seconds)
+    for body in targets:
+        direction = normalize(anchor.fields.position - body.fields.position)
+        force_record = {"vector": direction * pull, "expires_after_seconds": spell.attributes.duration_seconds}
+        forces = list(body.fields.get("forces", []))
+        forces.append(force_record)
+        world.setField(body, "forces", forces)
+        world.appendEvent("remove_field_entry", {"object": body.handle, "field": "forces", "value": force_record, "after_seconds": spell.attributes.duration_seconds})
 ```
 
 #### What the magic does
@@ -557,12 +593,18 @@ function performSoftRepair(magic, world, caster):
     spell = interpreted.spells[0]  # structural position, not a generated id
     requireCapability("ogmr.capability.repair")
     requireCapability("ogmr.capability.soft_material")
-    target = world.resolveSoftMaterial(spell.attributes.target)
-    assert caster.energy >= spell.attributes.energy_cost
+    target = world.getObject(spell.attributes.target)
+    assert caster.fields.get("energy", 0) >= spell.attributes.energy_cost
     repair = min(spell.attributes.repair_points, spell.bounds.max_repair_points)
     limit = min(spell.attributes.stop_at_integrity, spell.bounds.max_integrity)
-    world.spendEnergy(caster, spell.attributes.energy_cost)
-    world.repairGradually(target, repair, limit, spell.attributes.duration_seconds)
+    world.setField(caster, "energy", caster.fields.get("energy", 0) - spell.attributes.energy_cost)
+    current_integrity = target.fields.get("integrity", 0)
+    max_integrity = max(target.fields.get("max_integrity", 1), 1)
+    target_integrity = min(limit * max_integrity, current_integrity + repair)
+    steps = max(1, int(spell.attributes.duration_seconds))
+    delta_per_step = (target_integrity - current_integrity) / steps
+    for step in range(1, steps + 1):
+        world.appendEvent("field_delta_at", {"object": target.handle, "field": "integrity", "delta": delta_per_step, "at_seconds": step})
 ```
 
 #### What the magic does
