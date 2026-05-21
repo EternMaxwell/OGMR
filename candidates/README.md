@@ -71,7 +71,7 @@ The reference decomposition for this test is:
     "grid_particle_fluid",
     "falling_sand",
     "solid_soft_body",
-    "heat_map_with_air"
+    "heat_map_air_interaction"
   ]
 }
 ```
@@ -100,9 +100,12 @@ Candidate status for this stress test:
 | Patch Delta | Pass | Can patch in projectile state, velocity, heat/trail emission records, collision-trigger records, explosion damage/heat deltas, fragments, fire particles, and impulse fallback deltas. |
 
 No candidate currently fails this stress test. If a future candidate cannot
-represent all required spell roles and component interactions without
-game-specific helper functions, keep it in this list and mark its status as
-`Fail`.
+represent all required spell roles and component interactions as declarative
+spell data that a performer can lower to component reads, writes, and events,
+keep it in this list and mark its status as `Fail`. A candidate would fail if it
+needed one opaque helper such as `world.castFireball()` or `world.explodeMagic()`
+instead of representing projectile spawn, motion, heat emission, collision,
+damage, fragments, and impulse fallback as separate inspectable spell roles.
 
 ## Shared design goals
 
