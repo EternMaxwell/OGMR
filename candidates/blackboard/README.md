@@ -6,7 +6,7 @@ This candidate represents magic through shared facts read and written by schedul
 
 ## Core concepts
 
-- **Spell**: one declarative unit in the the shared facts read and written by scheduled spell rules model. Spell records may be queries, formulas, component patches, schedules, resource debits, or other candidate-shaped operations with requirements, validation bounds, metadata, and extension data.
+- **Spell**: one declarative unit in the shared facts read and written by scheduled spell rules model. Spell records may be queries, formulas, component patches, schedules, resource debits, or other candidate-shaped operations with requirements, validation bounds, metadata, and extension data.
 - **Magic**: the complete shared facts read and written by scheduled spell rules composition containing many spells, entry points, policies, spell provenance summaries, and diagnostics.
 - **Performer**: a game-provided runtime that consumes the interpreted magic structure and maps abstract effects to the concrete world.
 

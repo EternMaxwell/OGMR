@@ -6,7 +6,7 @@ This candidate represents magic through spell actors, channels, handlers, and ty
 
 ## Core concepts
 
-- **Spell**: one declarative unit in the the spell actors, channels, handlers, and typed messages model. Spell records may be queries, formulas, component patches, schedules, resource debits, or other candidate-shaped operations with requirements, validation bounds, metadata, and extension data.
+- **Spell**: one declarative unit in the spell actors, channels, handlers, and typed messages model. Spell records may be queries, formulas, component patches, schedules, resource debits, or other candidate-shaped operations with requirements, validation bounds, metadata, and extension data.
 - **Magic**: the complete spell actors, channels, handlers, and typed messages composition containing many spells, entry points, policies, spell provenance summaries, and diagnostics.
 - **Performer**: a game-provided runtime that consumes the interpreted magic structure and maps abstract effects to the concrete world.
 
