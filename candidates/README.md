@@ -103,7 +103,7 @@ No candidate currently fails this stress test. If a future candidate cannot
 represent all required spell roles and component interactions as declarative
 spell data that a performer can lower to component reads, writes, and events,
 keep it in this list and mark its status as `Fail`. A candidate would fail if it
-needed one opaque helper such as `world.castFireball()` or `world.explodeMagic()`
+needed an opaque helper such as `world.castFireball()` or `world.explodeMagic()`
 instead of representing projectile spawn, motion, heat emission, collision,
 damage, fragments, and impulse fallback as separate inspectable spell roles.
 
