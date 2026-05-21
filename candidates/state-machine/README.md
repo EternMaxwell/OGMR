@@ -6,13 +6,13 @@ This candidate represents magic through states, transitions, guards, actions, an
 
 ## Core concepts
 
-- **Spell**: one declarative unit in the states, transitions, guards, actions, and lifecycle phases model, with typed attributes, requirements, validation bounds, metadata, and extension data.
+- **Spell**: one declarative unit in the the states, transitions, guards, actions, and lifecycle phases model. Spell records may be queries, formulas, component patches, schedules, resource debits, or other candidate-shaped operations with requirements, validation bounds, metadata, and extension data.
 - **Magic**: the complete states, transitions, guards, actions, and lifecycle phases composition containing many spells, entry points, policies, spell provenance summaries, and diagnostics.
 - **Performer**: a game-provided runtime that consumes the interpreted magic structure and maps abstract effects to the concrete world.
 
 ## Structural model
 
-Each spell structure contains `spell_type`, typed attributes, requirements, metadata, bounds, generator provenance, and extension payloads, but not a required id. Each magic structure contains `version`, the states, transitions, guards, actions, and lifecycle phases topology, entry points, policies, spell provenance summaries, global requirements, and validation diagnostics.
+Each spell structure uses the candidate's own operation shape rather than one required `spell_type` plus `attributes` schema; records still carry requirements, metadata, bounds, generator provenance, and extension payloads without a required id. Each magic structure contains `version`, the states, transitions, guards, actions, and lifecycle phases topology, entry points, policies, spell provenance summaries, global requirements, and validation diagnostics.
 
 ## How it describes physical worlds
 
@@ -39,42 +39,82 @@ This candidate supports procedural spell generation. Generators create spell str
 
 Spell and magic are different structures.
 
-- **Spell structure**: one reusable or procedurally generated unit of intent with `spell_type`, typed attributes, declared inputs/outputs when relevant, requirements, metadata, validation bounds, generator provenance, and extension payloads. It must not require a usable id.
+- **Spell structure**: one reusable or procedurally generated unit of intent. It may be an operation record, query, formula, component patch, schedule, resource debit, or other candidate-specific shape; it declares inputs/outputs when relevant, capability requirements, validation bounds, provenance, and extension payloads without requiring a usable id.
 - **Magic structure**: a composition/container with format version, the candidate-specific topology, entry points, performer policies, global requirements, and interpreter diagnostics. It may name the composition, but spell addressing inside it must use topology/local handles rather than generated spell ids.
 
 The interpreter keeps this separation while resolving many spells into one performer-facing magic object. It validates and lowers data, but it does not apply effects to a game world.
 
 ## Validation examples
 
-Each candidate includes at least five concrete validation examples. Every example separates the generated spell data from the candidate-specific magic container, shows performer-facing pseudocode, and describes the intended runtime behavior. The pseudocode assumes `world` exposes only low-level accessors and mutators such as `getObject`, `listObjects`, `createObject`, `setField`, and `appendEvent`; all magic-like behavior is computed by the performer from object fields.
+Each candidate includes at least five concrete validation examples. Every example separates generated spell data from the candidate-specific magic container, shows performer-facing pseudocode, and describes the intended runtime behavior. The examples intentionally compose each magic from multiple spells and use varied spell records such as scopes, component reads, field patches, schedules, formulas, and resource debits rather than a single mandatory attribute-only spell shape.
 
-### Example 1: Thermal Lift
+The validation examples use a concrete but still low-level example world. `world.gravity` is a gravity map with mass-derived potential cells plus a background base potential map; the host simulation may solve the Poisson equation after performers write mass or potential fields. `world.fluid` combines grid cells and particles for liquid quantities. `world.sand` is a falling-sand grid for fast powder and simple dynamic solid elements. `world.body` stores rigid-body, solid-body, and softbody objects and node fields. `world.heat` stores temperatures and a simplified air-fluid layer that can exchange heat with the other components. These components expose accessors and mutators for cells, particles, objects, fields, and scheduled events only; examples must not call direct magic-like helpers such as `repairGradually`, `shapeBarrier`, or `applyForce`.
+
+### Example 1: Gravity-Heated Updraft
 
 #### JSON spell representation
 
 ```json
 {
-  "spell_type": "ogmr.thermal_lift",
-  "attributes": {
-    "target": "selected_volume",
-    "heat_joules": 1200,
-    "lift_newtons": 35,
-    "duration_seconds": 3
-  },
-  "requirements": [
-    "ogmr.capability.thermal",
-    "ogmr.capability.force"
-  ],
-  "bounds": {
-    "max_area_m2": 4,
-    "max_duration_seconds": 3,
-    "max_temperature_delta_c": 20,
-    "max_force_newtons": 35
-  },
-  "provenance": {
-    "generator": "example.validation",
-    "seed": 4242
-  }
+  "spell_encoding": "state_action_operation_records",
+  "state_actions": [
+    {
+      "state": "state_0",
+      "handle": "air_column",
+      "record": {
+        "op": "scope.volume",
+        "handle": "air_column",
+        "component_reads": [
+          "heat_map.air",
+          "gravity_map.potential"
+        ],
+        "selector": {
+          "kind": "cylinder",
+          "center": "caster.forward_2m",
+          "radius_m": 1.2,
+          "height_m": 4.0
+        },
+        "limits": {
+          "max_cells": 96
+        }
+      }
+    },
+    {
+      "state": "state_1",
+      "handle": "warm_air",
+      "record": {
+        "op": "thermal.cell_delta",
+        "handle": "warm_air",
+        "input": "air_column",
+        "write": {
+          "component": "heat_map",
+          "field": "temperature_c"
+        },
+        "delta_c": 12,
+        "limits": {
+          "max_total_joules": 1800
+        }
+      }
+    },
+    {
+      "state": "state_2",
+      "handle": "lift_targets",
+      "record": {
+        "op": "body.force_patch",
+        "handle": "lift_targets",
+        "input": "air_column",
+        "reads": [
+          "gravity_map.potential_gradient",
+          "solid_soft_body.mass"
+        ],
+        "force": {
+          "direction": "against_local_gravity",
+          "newtons": 45
+        },
+        "duration_s": 3
+      }
+    }
+  ]
 }
 ```
 
@@ -84,54 +124,68 @@ Each candidate includes at least five concrete validation examples. Every exampl
 {
   "version": 1,
   "format": "state_machine",
-  "spells": [
+  "spell_pool": [
     {
-      "spell_type": "ogmr.thermal_lift",
-      "attributes": {
-        "target": "selected_volume",
-        "heat_joules": 1200,
-        "lift_newtons": 35,
-        "duration_seconds": 3
-      },
-      "requirements": [
-        "ogmr.capability.thermal",
-        "ogmr.capability.force"
+      "op": "scope.volume",
+      "handle": "air_column",
+      "component_reads": [
+        "heat_map.air",
+        "gravity_map.potential"
       ],
-      "bounds": {
-        "max_area_m2": 4,
-        "max_duration_seconds": 3,
-        "max_temperature_delta_c": 20,
-        "max_force_newtons": 35
+      "selector": {
+        "kind": "cylinder",
+        "center": "caster.forward_2m",
+        "radius_m": 1.2,
+        "height_m": 4.0
       },
-      "provenance": {
-        "generator": "example.validation",
-        "seed": 4242
+      "limits": {
+        "max_cells": 96
       }
-    }
-  ],
-  "entry_point": "cast",
-  "states": [
-    {
-      "name": "cast",
-      "on_enter": [
-        {
-          "spell": 0
-        }
-      ],
-      "transitions": [
-        {
-          "to": "expire",
-          "after_seconds": 3
-        }
-      ]
     },
     {
-      "name": "expire",
-      "on_enter": [
-        {
-          "cleanup": "thermal_lift"
-        }
-      ]
+      "op": "thermal.cell_delta",
+      "handle": "warm_air",
+      "input": "air_column",
+      "write": {
+        "component": "heat_map",
+        "field": "temperature_c"
+      },
+      "delta_c": 12,
+      "limits": {
+        "max_total_joules": 1800
+      }
+    },
+    {
+      "op": "body.force_patch",
+      "handle": "lift_targets",
+      "input": "air_column",
+      "reads": [
+        "gravity_map.potential_gradient",
+        "solid_soft_body.mass"
+      ],
+      "force": {
+        "direction": "against_local_gravity",
+        "newtons": 45
+      },
+      "duration_s": 3
+    }
+  ],
+  "initial_state": "prepare",
+  "states": [
+    {
+      "name": "state_0",
+      "on_enter_spell": 0,
+      "next": "state_1"
+    },
+    {
+      "name": "state_1",
+      "on_enter_spell": 1,
+      "next": "state_2"
+    },
+    {
+      "name": "state_2",
+      "on_enter_spell": 2,
+      "next": "done"
     }
   ]
 }
@@ -140,57 +194,87 @@ Each candidate includes at least five concrete validation examples. Every exampl
 #### Performer pseudocode
 
 ```text
-function performThermalLift(magic, world, caster):
-    interpreted = interpreter.validateAndResolve(magic)
-    spell = interpreted.spells[0]  # structural position, not a generated id
-    requireCapability("ogmr.capability.thermal")
-    requireCapability("ogmr.capability.force")
-    target = world.getObject(spell.attributes.target)
-    assert target.fields.area_m2 <= spell.bounds.max_area_m2
-    heat_capacity = max(target.fields.get("heat_capacity_j_per_c", 1), 1)
-    temperature_delta = min(spell.bounds.max_temperature_delta_c, spell.attributes.heat_joules / heat_capacity)
-    heat = min(spell.attributes.heat_joules, temperature_delta * heat_capacity)
-    force = min(spell.attributes.lift_newtons, spell.bounds.max_force_newtons)
-    world.setField(target, "heat_joules", target.fields.get("heat_joules", 0) + heat)
-    force_record = {"vector": [0, force, 0], "expires_after_seconds": spell.attributes.duration_seconds}
-    forces = list(target.fields.get("forces", []))
-    forces.append(force_record)
-    world.setField(target, "forces", forces)
-    world.appendEvent("remove_field_entry", {"object": target.handle, "field": "forces", "value": force_record, "after_seconds": spell.attributes.duration_seconds})
+function performGravityHeatedUpdraft(magic, world, caster):
+    plan = interpreter.validateAndResolve(magic)
+    for cell_ref in plan.local("air_column").cells:
+        heat_cell = world.heat.getCell(cell_ref)
+        gravity_cell = world.gravity.getCell(cell_ref)
+        capped_delta = min(plan.local("warm_air").delta_c, heat_cell.fields.max_safe_delta_c)
+        world.heat.setCell(cell_ref, heat_cell.withField("temperature_c", heat_cell.fields.temperature_c + capped_delta))
+        world.gravity.setCell(cell_ref, gravity_cell.withField("local_mass_kg", gravity_cell.fields.local_mass_kg + heat_cell.fields.air_mass_kg))
+    for body_ref in plan.local("lift_targets").body_refs:
+        body = world.body.getObject(body_ref)
+        gradient = world.gravity.getCell(body.fields.center_cell).fields.potential_gradient
+        force_entry = {"vector": normalize(-gradient) * plan.local("lift_targets").force.newtons, "expires_at_tick": world.tick + 180}
+        forces = list(body.fields.get("force_entries", []))
+        forces.append(force_entry)
+        world.body.setField(body_ref, "force_entries", forces)
+        world.appendEvent("body.remove_force_entry", {"body": body_ref, "entry": force_entry, "at_tick": world.tick + 180})
 ```
 
 #### What the magic does
 
-The spell selects a target volume, adds bounded heat, converts the heated air into upward force, and removes the force after the declared duration. In this candidate, the magic composes the spell through state entry actions and expiry transitions, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+The magic combines a scope spell, heat-map cell edits, gravity-map sampling, and body force fields. The performer only reads and writes cells, object fields, and events; the gravity Poisson solve and heat/air update run later in the host simulation.
 
-### Example 2: Water Wall
+### Example 2: Fluid-and-Sand Water Wall
 
 #### JSON spell representation
 
 ```json
 {
-  "spell_type": "ogmr.water_wall",
-  "attributes": {
-    "source": "nearby_water",
-    "shape": "wall",
-    "length_m": 5,
-    "height_m": 2,
-    "duration_seconds": 6
-  },
-  "requirements": [
-    "ogmr.capability.material.water",
-    "ogmr.capability.shape_barrier"
-  ],
-  "bounds": {
-    "max_volume_liters": 800,
-    "max_length_m": 5,
-    "max_height_m": 2,
-    "max_duration_seconds": 6
-  },
-  "provenance": {
-    "generator": "example.validation",
-    "seed": 5150
-  }
+  "spell_encoding": "state_action_operation_records",
+  "state_actions": [
+    {
+      "state": "state_0",
+      "handle": "water_source",
+      "record": {
+        "op": "fluid.source_scan",
+        "handle": "water_source",
+        "component_reads": [
+          "fluid.grid",
+          "fluid.particles"
+        ],
+        "material": "water",
+        "bounds": {
+          "max_liters": 700,
+          "radius_m": 6
+        }
+      }
+    },
+    {
+      "state": "state_1",
+      "handle": "packed_footing",
+      "record": {
+        "op": "falling_sand.foundation",
+        "handle": "packed_footing",
+        "component": "falling_sand",
+        "material_filter": [
+          "wet_sand",
+          "clay"
+        ],
+        "shape": {
+          "kind": "line",
+          "length_m": 5
+        }
+      }
+    },
+    {
+      "state": "state_2",
+      "handle": "wall_volume",
+      "record": {
+        "op": "fluid.grid_particle_transfer",
+        "handle": "wall_volume",
+        "from": "water_source",
+        "support": "packed_footing",
+        "target_shape": {
+          "kind": "wall",
+          "height_m": 2,
+          "thickness_m": 0.35
+        },
+        "duration_s": 6
+      }
+    }
+  ]
 }
 ```
 
@@ -200,55 +284,62 @@ The spell selects a target volume, adds bounded heat, converts the heated air in
 {
   "version": 1,
   "format": "state_machine",
-  "spells": [
+  "spell_pool": [
     {
-      "spell_type": "ogmr.water_wall",
-      "attributes": {
-        "source": "nearby_water",
-        "shape": "wall",
-        "length_m": 5,
+      "op": "fluid.source_scan",
+      "handle": "water_source",
+      "component_reads": [
+        "fluid.grid",
+        "fluid.particles"
+      ],
+      "material": "water",
+      "bounds": {
+        "max_liters": 700,
+        "radius_m": 6
+      }
+    },
+    {
+      "op": "falling_sand.foundation",
+      "handle": "packed_footing",
+      "component": "falling_sand",
+      "material_filter": [
+        "wet_sand",
+        "clay"
+      ],
+      "shape": {
+        "kind": "line",
+        "length_m": 5
+      }
+    },
+    {
+      "op": "fluid.grid_particle_transfer",
+      "handle": "wall_volume",
+      "from": "water_source",
+      "support": "packed_footing",
+      "target_shape": {
+        "kind": "wall",
         "height_m": 2,
-        "duration_seconds": 6
+        "thickness_m": 0.35
       },
-      "requirements": [
-        "ogmr.capability.material.water",
-        "ogmr.capability.shape_barrier"
-      ],
-      "bounds": {
-        "max_volume_liters": 800,
-        "max_length_m": 5,
-        "max_height_m": 2,
-        "max_duration_seconds": 6
-      },
-      "provenance": {
-        "generator": "example.validation",
-        "seed": 5150
-      }
+      "duration_s": 6
     }
   ],
-  "entry_point": "cast",
+  "initial_state": "prepare",
   "states": [
     {
-      "name": "cast",
-      "on_enter": [
-        {
-          "spell": 0
-        }
-      ],
-      "transitions": [
-        {
-          "to": "expire",
-          "after_seconds": 6
-        }
-      ]
+      "name": "state_0",
+      "on_enter_spell": 0,
+      "next": "state_1"
     },
     {
-      "name": "expire",
-      "on_enter": [
-        {
-          "cleanup": "water_wall"
-        }
-      ]
+      "name": "state_1",
+      "on_enter_spell": 1,
+      "next": "state_2"
+    },
+    {
+      "name": "state_2",
+      "on_enter_spell": 2,
+      "next": "done"
     }
   ]
 }
@@ -257,306 +348,82 @@ The spell selects a target volume, adds bounded heat, converts the heated air in
 #### Performer pseudocode
 
 ```text
-function performWaterWall(magic, world, caster):
-    interpreted = interpreter.validateAndResolve(magic)
-    spell = interpreted.spells[0]  # structural position, not a generated id
-    requireCapability("ogmr.capability.material.water")
-    requireCapability("ogmr.capability.shape_barrier")
-    water_sources = world.listObjects({"material": "water", "near": spell.attributes.source})
-    assert spell.attributes.length_m <= spell.bounds.max_length_m
-    assert spell.attributes.height_m <= spell.bounds.max_height_m
-    remaining_liters = spell.bounds.max_volume_liters
-    gathered_liters = 0
-    for source in water_sources:
-        available = source.fields.get("available_liters", 0)
-        taken = min(available, remaining_liters)
-        if taken > 0:
-            world.setField(source, "available_liters", available - taken)
-            gathered_liters += taken
-            remaining_liters -= taken
-    barrier = world.createObject({"kind": "temporary_barrier", "material": "water"})
-    world.setField(barrier, "shape", spell.attributes.shape)
-    world.setField(barrier, "length_m", spell.attributes.length_m)
-    world.setField(barrier, "height_m", spell.attributes.height_m)
-    world.setField(barrier, "contained_liters", gathered_liters)
-    world.setField(barrier, "cohesion_until_seconds", spell.attributes.duration_seconds)
-    world.appendEvent("delete_object", {"object": barrier.handle, "after_seconds": spell.attributes.duration_seconds})
+function performFluidAndSandWaterWall(magic, world, caster):
+    plan = interpreter.validateAndResolve(magic)
+    remaining = plan.local("water_source").bounds.max_liters
+    for particle_ref in world.fluid.listParticles(plan.local("water_source").scan_bounds):
+        particle = world.fluid.getParticle(particle_ref)
+        if particle.fields.material == "water" and remaining > 0:
+            moved = min(particle.fields.volume_liters, remaining)
+            world.fluid.setParticleField(particle_ref, "volume_liters", particle.fields.volume_liters - moved)
+            remaining -= moved
+            target_cell = plan.local("wall_volume").next_target_cell()
+            cell = world.fluid.getGridCell(target_cell)
+            world.fluid.setGridCell(target_cell, cell.withField("water_liters", cell.fields.water_liters + moved))
+    for sand_ref in plan.local("packed_footing").cells:
+        sand_cell = world.sand.getCell(sand_ref)
+        if sand_cell.fields.material in ["wet_sand", "clay"]:
+            world.sand.setCell(sand_ref, sand_cell.withField("packing", min(1.0, sand_cell.fields.packing + 0.25)))
+    world.appendEvent("fluid.release_cells", {"cells": plan.local("wall_volume").target_cells, "at_tick": world.tick + 360})
 ```
 
 #### What the magic does
 
-The spell gathers available water or water-tagged entities, shapes them into a bounded barrier, increases cohesion, and releases the water when the duration expires. In this candidate, the magic composes the spell through state entry actions and expiry transitions, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+The magic is a three-spell composition over fluid particles, fluid grid cells, and falling-sand support cells. It creates no magic wall function; it moves water quantities and sand packing fields that existing solvers can process.
 
-### Example 3: Stone Brace
+### Example 3: Stone Brace Under Load
 
 #### JSON spell representation
 
 ```json
 {
-  "spell_type": "ogmr.stone_brace",
-  "attributes": {
-    "target": "touched_structure",
-    "stiffness_multiplier": 1.5,
-    "fracture_bonus": 0.25,
-    "duration_seconds": 8
-  },
-  "requirements": [
-    "ogmr.capability.material.stone",
-    "ogmr.capability.modify_structure"
-  ],
-  "bounds": {
-    "max_mass_kg": 2000,
-    "max_stiffness_multiplier": 1.5,
-    "max_fracture_bonus": 0.25,
-    "max_duration_seconds": 8
-  },
-  "provenance": {
-    "generator": "example.validation",
-    "seed": 6161
-  }
-}
-```
-
-#### JSON magic representation
-
-```json
-{
-  "version": 1,
-  "format": "state_machine",
-  "spells": [
+  "spell_encoding": "state_action_operation_records",
+  "state_actions": [
     {
-      "spell_type": "ogmr.stone_brace",
-      "attributes": {
-        "target": "touched_structure",
-        "stiffness_multiplier": 1.5,
-        "fracture_bonus": 0.25,
-        "duration_seconds": 8
-      },
-      "requirements": [
-        "ogmr.capability.material.stone",
-        "ogmr.capability.modify_structure"
-      ],
-      "bounds": {
-        "max_mass_kg": 2000,
-        "max_stiffness_multiplier": 1.5,
-        "max_fracture_bonus": 0.25,
-        "max_duration_seconds": 8
-      },
-      "provenance": {
-        "generator": "example.validation",
-        "seed": 6161
+      "state": "state_0",
+      "handle": "arch_segment",
+      "record": {
+        "op": "body.target",
+        "handle": "arch_segment",
+        "component_reads": [
+          "solid_soft_body"
+        ],
+        "selector": {
+          "tag": "damaged_arch"
+        },
+        "limits": {
+          "max_mass_kg": 2500
+        }
       }
-    }
-  ],
-  "entry_point": "cast",
-  "states": [
-    {
-      "name": "cast",
-      "on_enter": [
-        {
-          "spell": 0
-        }
-      ],
-      "transitions": [
-        {
-          "to": "expire",
-          "after_seconds": 8
-        }
-      ]
     },
     {
-      "name": "expire",
-      "on_enter": [
-        {
-          "cleanup": "stone_brace"
-        }
-      ]
-    }
-  ]
-}
-```
-
-#### Performer pseudocode
-
-```text
-function performStoneBrace(magic, world, caster):
-    interpreted = interpreter.validateAndResolve(magic)
-    spell = interpreted.spells[0]  # structural position, not a generated id
-    requireCapability("ogmr.capability.material.stone")
-    requireCapability("ogmr.capability.modify_structure")
-    structure = world.getObject(spell.attributes.target)
-    assert structure.fields.mass_kg <= spell.bounds.max_mass_kg
-    original = {
-        "stiffness": structure.fields.get("stiffness", 1),
-        "fracture_threshold": structure.fields.get("fracture_threshold", 1)
-    }
-    stiffness_multiplier = min(spell.attributes.stiffness_multiplier, spell.bounds.max_stiffness_multiplier)
-    fracture_bonus = min(spell.attributes.fracture_bonus, spell.bounds.max_fracture_bonus)
-    world.setField(structure, "stiffness", original["stiffness"] * stiffness_multiplier)
-    world.setField(structure, "fracture_threshold", original["fracture_threshold"] + fracture_bonus)
-    world.appendEvent("restore_fields", {"object": structure.handle, "fields": original, "after_seconds": spell.attributes.duration_seconds})
-```
-
-#### What the magic does
-
-The spell reinforces a touched stone or structure by bounded stiffness and fracture modifiers, records the original material state, and restores it after expiry. In this candidate, the magic composes the spell through state entry actions and expiry transitions, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
-
-### Example 4: Gravity Snare
-
-#### JSON spell representation
-
-```json
-{
-  "spell_type": "ogmr.gravity_snare",
-  "attributes": {
-    "anchor": "caster_focus",
-    "radius_m": 6,
-    "pull_newtons": 40,
-    "duration_seconds": 4,
-    "exclude_tags": [
-      "ally"
-    ]
-  },
-  "requirements": [
-    "ogmr.capability.gravity_field",
-    "ogmr.capability.target_filter"
-  ],
-  "bounds": {
-    "max_radius_m": 6,
-    "max_pull_newtons": 40,
-    "max_targets": 10,
-    "max_duration_seconds": 4
-  },
-  "provenance": {
-    "generator": "example.validation",
-    "seed": 7171
-  }
-}
-```
-
-#### JSON magic representation
-
-```json
-{
-  "version": 1,
-  "format": "state_machine",
-  "spells": [
-    {
-      "spell_type": "ogmr.gravity_snare",
-      "attributes": {
-        "anchor": "caster_focus",
-        "radius_m": 6,
-        "pull_newtons": 40,
-        "duration_seconds": 4,
-        "exclude_tags": [
-          "ally"
+      "state": "state_1",
+      "handle": "load_vector",
+      "record": {
+        "op": "gravity.load_sample",
+        "handle": "load_vector",
+        "input": "arch_segment",
+        "component_reads": [
+          "gravity_map.base_potential",
+          "gravity_map.mass_potential"
         ]
-      },
-      "requirements": [
-        "ogmr.capability.gravity_field",
-        "ogmr.capability.target_filter"
-      ],
-      "bounds": {
-        "max_radius_m": 6,
-        "max_pull_newtons": 40,
-        "max_targets": 10,
-        "max_duration_seconds": 4
-      },
-      "provenance": {
-        "generator": "example.validation",
-        "seed": 7171
       }
-    }
-  ],
-  "entry_point": "cast",
-  "states": [
-    {
-      "name": "cast",
-      "on_enter": [
-        {
-          "spell": 0
-        }
-      ],
-      "transitions": [
-        {
-          "to": "expire",
-          "after_seconds": 4
-        }
-      ]
     },
     {
-      "name": "expire",
-      "on_enter": [
-        {
-          "cleanup": "gravity_snare"
-        }
-      ]
+      "state": "state_2",
+      "handle": "brace_patch",
+      "record": {
+        "op": "body.material_patch",
+        "handle": "brace_patch",
+        "input": "arch_segment",
+        "fields": {
+          "stiffness_scale": 1.4,
+          "fracture_threshold_add": 120
+        },
+        "restore_after_s": 10
+      }
     }
   ]
-}
-```
-
-#### Performer pseudocode
-
-```text
-function performGravitySnare(magic, world, caster):
-    interpreted = interpreter.validateAndResolve(magic)
-    spell = interpreted.spells[0]  # structural position, not a generated id
-    requireCapability("ogmr.capability.gravity_field")
-    requireCapability("ogmr.capability.target_filter")
-    anchor = world.getObject(spell.attributes.anchor)
-    assert spell.attributes.radius_m <= spell.bounds.max_radius_m
-    targets = []
-    for body in world.listObjects({"has_field": "position"}):
-        tags = body.fields.get("tags", [])
-        if any(tag in tags for tag in spell.attributes.exclude_tags):
-            continue
-        if distance(body.fields.position, anchor.fields.position) <= spell.attributes.radius_m:
-            targets.append(body)
-        if len(targets) == spell.bounds.max_targets:
-            break
-    pull = min(spell.attributes.pull_newtons, spell.bounds.max_pull_newtons)
-    for body in targets:
-        direction = normalize(anchor.fields.position - body.fields.position)
-        force_record = {"vector": direction * pull, "expires_after_seconds": spell.attributes.duration_seconds}
-        forces = list(body.fields.get("forces", []))
-        forces.append(force_record)
-        world.setField(body, "forces", forces)
-        world.appendEvent("remove_field_entry", {"object": body.handle, "field": "forces", "value": force_record, "after_seconds": spell.attributes.duration_seconds})
-```
-
-#### What the magic does
-
-The spell creates a local gravity field around an anchor, filters excluded targets, clamps pull strength and target count, and applies temporary inward force. In this candidate, the magic composes the spell through state entry actions and expiry transitions, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
-
-### Example 5: Soft Repair
-
-#### JSON spell representation
-
-```json
-{
-  "spell_type": "ogmr.soft_repair",
-  "attributes": {
-    "target": "damaged_soft_material",
-    "repair_points": 30,
-    "energy_cost": 12,
-    "duration_seconds": 5,
-    "stop_at_integrity": 0.9
-  },
-  "requirements": [
-    "ogmr.capability.repair",
-    "ogmr.capability.soft_material"
-  ],
-  "bounds": {
-    "max_repair_points": 30,
-    "max_energy_cost": 12,
-    "max_duration_seconds": 5,
-    "max_integrity": 0.9
-  },
-  "provenance": {
-    "generator": "example.validation",
-    "seed": 8181
-  }
 }
 ```
 
@@ -566,55 +433,56 @@ The spell creates a local gravity field around an anchor, filters excluded targe
 {
   "version": 1,
   "format": "state_machine",
-  "spells": [
+  "spell_pool": [
     {
-      "spell_type": "ogmr.soft_repair",
-      "attributes": {
-        "target": "damaged_soft_material",
-        "repair_points": 30,
-        "energy_cost": 12,
-        "duration_seconds": 5,
-        "stop_at_integrity": 0.9
-      },
-      "requirements": [
-        "ogmr.capability.repair",
-        "ogmr.capability.soft_material"
+      "op": "body.target",
+      "handle": "arch_segment",
+      "component_reads": [
+        "solid_soft_body"
       ],
-      "bounds": {
-        "max_repair_points": 30,
-        "max_energy_cost": 12,
-        "max_duration_seconds": 5,
-        "max_integrity": 0.9
+      "selector": {
+        "tag": "damaged_arch"
       },
-      "provenance": {
-        "generator": "example.validation",
-        "seed": 8181
+      "limits": {
+        "max_mass_kg": 2500
       }
-    }
-  ],
-  "entry_point": "cast",
-  "states": [
+    },
     {
-      "name": "cast",
-      "on_enter": [
-        {
-          "spell": 0
-        }
-      ],
-      "transitions": [
-        {
-          "to": "expire",
-          "after_seconds": 5
-        }
+      "op": "gravity.load_sample",
+      "handle": "load_vector",
+      "input": "arch_segment",
+      "component_reads": [
+        "gravity_map.base_potential",
+        "gravity_map.mass_potential"
       ]
     },
     {
-      "name": "expire",
-      "on_enter": [
-        {
-          "cleanup": "soft_repair"
-        }
-      ]
+      "op": "body.material_patch",
+      "handle": "brace_patch",
+      "input": "arch_segment",
+      "fields": {
+        "stiffness_scale": 1.4,
+        "fracture_threshold_add": 120
+      },
+      "restore_after_s": 10
+    }
+  ],
+  "initial_state": "prepare",
+  "states": [
+    {
+      "name": "state_0",
+      "on_enter_spell": 0,
+      "next": "state_1"
+    },
+    {
+      "name": "state_1",
+      "on_enter_spell": 1,
+      "next": "state_2"
+    },
+    {
+      "name": "state_2",
+      "on_enter_spell": 2,
+      "next": "done"
     }
   ]
 }
@@ -623,48 +491,300 @@ The spell creates a local gravity field around an anchor, filters excluded targe
 #### Performer pseudocode
 
 ```text
-function performSoftRepair(magic, world, caster):
-    interpreted = interpreter.validateAndResolve(magic)
-    spell = interpreted.spells[0]  # structural position, not a generated id
-    requireCapability("ogmr.capability.repair")
-    requireCapability("ogmr.capability.soft_material")
-    target = world.getObject(spell.attributes.target)
-    assert caster.fields.get("energy", 0) >= spell.attributes.energy_cost
-    repair = min(spell.attributes.repair_points, spell.bounds.max_repair_points)
-    limit = min(spell.attributes.stop_at_integrity, spell.bounds.max_integrity)
-    world.setField(caster, "energy", caster.fields.get("energy", 0) - spell.attributes.energy_cost)
-    current_integrity = target.fields.get("integrity", 0)
-    max_integrity = max(target.fields.get("max_integrity", 1), 1)
-    target_integrity = min(limit * max_integrity, current_integrity + repair)
-    steps = max(1, int(spell.attributes.duration_seconds))
-    delta_per_step = (target_integrity - current_integrity) / steps
-    for step in range(1, steps + 1):
-        world.appendEvent("field_delta_at", {"object": target.handle, "field": "integrity", "delta": delta_per_step, "at_seconds": step})
+function performStoneBraceUnderLoad(magic, world, caster):
+    plan = interpreter.validateAndResolve(magic)
+    body_ref = plan.local("arch_segment").body_ref
+    body = world.body.getObject(body_ref)
+    assert body.fields.mass_kg <= plan.local("arch_segment").limits.max_mass_kg
+    gravity_cell = world.gravity.getCell(body.fields.center_cell)
+    original = {"stiffness": body.fields.stiffness, "fracture_threshold": body.fields.fracture_threshold}
+    load_scale = 1 + length(gravity_cell.fields.potential_gradient) / max(body.fields.rest_gravity, 1)
+    world.body.setField(body_ref, "stiffness", original["stiffness"] * min(plan.local("brace_patch").fields.stiffness_scale, load_scale + 0.5))
+    world.body.setField(body_ref, "fracture_threshold", original["fracture_threshold"] + plan.local("brace_patch").fields.fracture_threshold_add)
+    world.appendEvent("body.restore_fields", {"body": body_ref, "fields": original, "at_tick": world.tick + 600})
 ```
 
 #### What the magic does
 
-The spell repairs damaged soft or living material gradually, spends bounded energy, and stops before exceeding the declared integrity threshold. In this candidate, the magic composes the spell through state entry actions and expiry transitions, so validation can prove the performer has the required capabilities, bounded parameters, and resolvable local structure before runtime effects are applied.
+The magic composes target selection, gravity-map load sampling, and solid-body material field edits. The performer writes only body fields and an event for restoration; solid-body integration remains a host-world concern.
 
-## Implementability and extensibility check
+### Example 4: Dust Vortex Cooling Ring
 
-This candidate is implementable if its interpreter can validate the topology, enforce generation bounds, resolve structural spell references, and emit a deterministic performer input structure. It is extensible because new spell types, attributes, policies, and extension payloads can be added under namespaces without changing the performer boundary.
+#### JSON spell representation
 
-## Strengths
+```json
+{
+  "spell_encoding": "state_action_operation_records",
+  "state_actions": [
+    {
+      "state": "state_0",
+      "handle": "loose_dust",
+      "record": {
+        "op": "sand.region_query",
+        "handle": "loose_dust",
+        "component": "falling_sand",
+        "materials": [
+          "dust",
+          "ash"
+        ],
+        "limits": {
+          "max_cells": 128
+        }
+      }
+    },
+    {
+      "state": "state_1",
+      "handle": "cooling_ring",
+      "record": {
+        "op": "heat.air_velocity_bias",
+        "handle": "cooling_ring",
+        "component": "heat_map.air",
+        "velocity": {
+          "tangent_mps": 3.5,
+          "updraft_mps": 0.8
+        },
+        "temperature_delta_c": -4
+      }
+    },
+    {
+      "state": "state_2",
+      "handle": "vortex_particles",
+      "record": {
+        "op": "sand.velocity_patch",
+        "handle": "vortex_particles",
+        "input": "loose_dust",
+        "field_from": "cooling_ring",
+        "duration_s": 4
+      }
+    }
+  ]
+}
+```
 
-- Supports authored magic composed from generated or authored spells.
-- Keeps spell format and magic format separate.
-- Has JSON interchange and a tightened production representation.
-- Gives performers resolved data instead of raw authoring syntax.
+#### JSON magic representation
 
-## Tradeoffs
+```json
+{
+  "version": 1,
+  "format": "state_machine",
+  "spell_pool": [
+    {
+      "op": "sand.region_query",
+      "handle": "loose_dust",
+      "component": "falling_sand",
+      "materials": [
+        "dust",
+        "ash"
+      ],
+      "limits": {
+        "max_cells": 128
+      }
+    },
+    {
+      "op": "heat.air_velocity_bias",
+      "handle": "cooling_ring",
+      "component": "heat_map.air",
+      "velocity": {
+        "tangent_mps": 3.5,
+        "updraft_mps": 0.8
+      },
+      "temperature_delta_c": -4
+    },
+    {
+      "op": "sand.velocity_patch",
+      "handle": "vortex_particles",
+      "input": "loose_dust",
+      "field_from": "cooling_ring",
+      "duration_s": 4
+    }
+  ],
+  "initial_state": "prepare",
+  "states": [
+    {
+      "name": "state_0",
+      "on_enter_spell": 0,
+      "next": "state_1"
+    },
+    {
+      "name": "state_1",
+      "on_enter_spell": 1,
+      "next": "state_2"
+    },
+    {
+      "name": "state_2",
+      "on_enter_spell": 2,
+      "next": "done"
+    }
+  ]
+}
+```
 
-- Requires candidate-specific validation.
-- Generated spells need strict bounds.
-- Advanced worlds may need game-specific extension vocabularies.
+#### Performer pseudocode
 
-## Best use cases
+```text
+function performDustVortexCoolingRing(magic, world, caster):
+    plan = interpreter.validateAndResolve(magic)
+    for air_ref in plan.local("cooling_ring").air_cells:
+        air_cell = world.heat.getCell(air_ref)
+        velocity = air_cell.fields.air_velocity + plan.local("cooling_ring").velocity.vector_at(air_ref)
+        world.heat.setCell(air_ref, air_cell.withFields({"air_velocity": velocity, "temperature_c": air_cell.fields.temperature_c - 4}))
+    for sand_ref in plan.local("loose_dust").cells:
+        sand_cell = world.sand.getCell(sand_ref)
+        if sand_cell.fields.material in plan.local("loose_dust").materials:
+            air_cell = world.heat.getCell(sand_cell.fields.air_cell)
+            world.sand.setCell(sand_ref, sand_cell.withField("velocity", sand_cell.fields.velocity + air_cell.fields.air_velocity * 0.5))
+    world.appendEvent("sand.clear_velocity_bias", {"cells": plan.local("loose_dust").cells, "at_tick": world.tick + 240})
+```
 
-- Games whose tooling naturally matches this composition model.
-- Procedural spell-generation pipelines.
-- Performers that want safe, resolved, capability-checked magic data.
+#### What the magic does
+
+The magic is a composed interaction between falling-sand cells and the heat map air layer. It edits cell velocities and temperatures directly, leaving particle settling and air advection to the normal simulations.
+
+### Example 5: Softbody Repair With Thermal Guard
+
+#### JSON spell representation
+
+```json
+{
+  "spell_encoding": "state_action_operation_records",
+  "state_actions": [
+    {
+      "state": "state_0",
+      "handle": "torn_softbody",
+      "record": {
+        "op": "softbody.damage_scan",
+        "handle": "torn_softbody",
+        "component_reads": [
+          "solid_soft_body.soft"
+        ],
+        "selector": {
+          "tag": "repair_target"
+        },
+        "limits": {
+          "max_nodes": 64
+        }
+      }
+    },
+    {
+      "state": "state_1",
+      "handle": "repair_cost",
+      "record": {
+        "op": "caster.resource_debit",
+        "handle": "repair_cost",
+        "resource_field": "energy",
+        "amount": 25
+      }
+    },
+    {
+      "state": "state_2",
+      "handle": "integrity_steps",
+      "record": {
+        "op": "softbody.node_delta",
+        "handle": "integrity_steps",
+        "input": "torn_softbody",
+        "field": "integrity",
+        "total_delta": 0.35,
+        "steps": 5
+      }
+    },
+    {
+      "state": "state_3",
+      "handle": "thermal_guard",
+      "record": {
+        "op": "heat.clamp",
+        "handle": "thermal_guard",
+        "input": "torn_softbody",
+        "max_temperature_c": 45
+      }
+    }
+  ]
+}
+```
+
+#### JSON magic representation
+
+```json
+{
+  "version": 1,
+  "format": "state_machine",
+  "spell_pool": [
+    {
+      "op": "softbody.damage_scan",
+      "handle": "torn_softbody",
+      "component_reads": [
+        "solid_soft_body.soft"
+      ],
+      "selector": {
+        "tag": "repair_target"
+      },
+      "limits": {
+        "max_nodes": 64
+      }
+    },
+    {
+      "op": "caster.resource_debit",
+      "handle": "repair_cost",
+      "resource_field": "energy",
+      "amount": 25
+    },
+    {
+      "op": "softbody.node_delta",
+      "handle": "integrity_steps",
+      "input": "torn_softbody",
+      "field": "integrity",
+      "total_delta": 0.35,
+      "steps": 5
+    },
+    {
+      "op": "heat.clamp",
+      "handle": "thermal_guard",
+      "input": "torn_softbody",
+      "max_temperature_c": 45
+    }
+  ],
+  "initial_state": "prepare",
+  "states": [
+    {
+      "name": "state_0",
+      "on_enter_spell": 0,
+      "next": "state_1"
+    },
+    {
+      "name": "state_1",
+      "on_enter_spell": 1,
+      "next": "state_2"
+    },
+    {
+      "name": "state_2",
+      "on_enter_spell": 2,
+      "next": "state_3"
+    },
+    {
+      "name": "state_3",
+      "on_enter_spell": 3,
+      "next": "done"
+    }
+  ]
+}
+```
+
+#### Performer pseudocode
+
+```text
+function performSoftbodyRepairWithThermalGuard(magic, world, caster):
+    plan = interpreter.validateAndResolve(magic)
+    caster_energy = caster.fields.get("energy", 0)
+    assert caster_energy >= plan.local("repair_cost").amount
+    world.body.setField(caster.handle, "energy", caster_energy - plan.local("repair_cost").amount)
+    for node_ref in plan.local("torn_softbody").node_refs:
+        node = world.body.getSoftNode(node_ref)
+        heat_cell = world.heat.getCell(node.fields.heat_cell)
+        if heat_cell.fields.temperature_c <= plan.local("thermal_guard").max_temperature_c:
+            per_step = plan.local("integrity_steps").total_delta / plan.local("integrity_steps").steps
+            for step in range(1, plan.local("integrity_steps").steps + 1):
+                world.appendEvent("softbody.node_field_delta", {"node": node_ref, "field": "integrity", "delta": per_step, "at_tick": world.tick + step * 30})
+```
+
+#### What the magic does
+
+The magic uses four spells: scan damaged softbody nodes, debit caster energy, schedule node integrity deltas, and guard against overheating through heat-map cells. There is no world repair function; repair is expressed as low-level node-field events.
